@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - BRIDGE_DATABASE_URL=sqlite:///./bridge.db
+      - BRIDGE_ADMIN_API_KEY=bridge-admin-dev
+      - BRIDGE_INFERENCE_PROVIDER=ollama
+      - BRIDGE_OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - BRIDGE_MODEL_NAME=davidjbarnes/bridge-cli
+    volumes:
+      - api-data:/app
+
+  web:
+    build:
+      context: web
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
+  api-data:
