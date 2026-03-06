@@ -34,14 +34,14 @@ export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
 
       setError(null)
       const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: Math.random().toString(36).slice(2) + Date.now().toString(36),
         role: 'user',
         content: content.trim(),
         timestamp: Date.now(),
       }
 
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: Math.random().toString(36).slice(2) + Date.now().toString(36),
         role: 'assistant',
         content: '',
         timestamp: Date.now(),

@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Prism from 'prismjs'
+import 'prismjs/themes/prism-tomorrow.css'
 import 'prismjs/components/prism-java'
 import 'prismjs/components/prism-typescript'
 import 'prismjs/components/prism-jsx'

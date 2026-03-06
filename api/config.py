@@ -20,8 +20,8 @@ class Settings(BaseSettings):
 
     # Model inference
     inference_provider: str = "ollama"  # ollama, vllm, huggingface
-    model_name: str = "DavidJBarnes/bridge-cli"
-    ollama_base_url: str = "http://localhost:11434"
+    model_name: str = "bridge-cli"
+    ollama_base_url: str = "http://2070.zero:11434"
     vllm_base_url: str = "http://localhost:8001"
     hf_api_token: str = ""
     hf_inference_url: str = ""
