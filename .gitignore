@@ -43,3 +43,7 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Model weights (hosted on HuggingFace)
+*.gguf
+*.safetensors

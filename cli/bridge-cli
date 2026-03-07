@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Bridge CLI — interactive code assistant powered by your fine-tuned model."""
+
+import json
+import os
+import re
+import readline  # noqa: F401 — enables input() line editing
+import sys
+import urllib.request
+import urllib.error
+
+OLLAMA_URL = "http://2070.zero:11434/api/generate"
+MODEL = "bridge-cli"
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+
+LANG_EXTENSIONS = {
+    "java": ".java", "python": ".py", "typescript": ".ts", "tsx": ".tsx",
+    "javascript": ".js", "jsx": ".jsx", "css": ".css", "html": ".html",
+    "json": ".json", "yaml": ".yaml", "yml": ".yaml", "sql": ".sql",
+    "bash": ".sh", "sh": ".sh", "xml": ".xml", "properties": ".properties",
+    "gradle": ".gradle", "kotlin": ".kt",
+}
+
+BANNER = f"""{BOLD}{CYAN}
+  ╔══════════════════════════════════════╗
+  ║          Bridge CLI v0.2.0           ║
+  ║   Java/Spring Boot & React/TS AI    ║
+  ╚══════════════════════════════════════╝{RESET}
+
+  {DIM}Type a prompt and press Enter. Commands:{RESET}
+  {DIM}  /save [file]    — save last code block to file{RESET}
+  {DIM}  /saveall [dir]  — save all code blocks from last response{RESET}
+  {DIM}  /blocks         — list code blocks from last response{RESET}
+  {DIM}  /clear          — clear conversation history{RESET}
+  {DIM}  /model          — show current model info{RESET}
+  {DIM}  /quit           — exit (or Ctrl+D){RESET}
+"""
+
+
+def extract_code_blocks(text: str) -> list[dict]:
+    """Extract fenced code blocks from a response.
+
+    Returns list of dicts with 'lang', 'code', and 'filename' (if detected).
+    """
+    blocks = []
+    # Match ```lang or ```filename.ext patterns
+    pattern = re.compile(r"```(\S*)\n(.*?)```", re.DOTALL)
+    for match in pattern.finditer(text):
+        lang_or_file = match.group(1).strip()
+        code = match.group(2).rstrip("\n")
+
+        lang = ""
+        filename = ""
+
+        # Check if the label looks like a filename (has a dot with extension)
+        if "." in lang_or_file and "/" not in lang_or_file[:1]:
+            filename = lang_or_file
+            ext = os.path.splitext(filename)[1].lstrip(".")
+            lang = ext
+        else:
+            lang = lang_or_file
+
+        # Try to detect filename from code content
+        if not filename:
+            filename = guess_filename(code, lang)
+
+        blocks.append({"lang": lang, "code": code, "filename": filename})
+
+    return blocks
+
+
+def guess_filename(code: str, lang: str) -> str:
+    """Try to guess a filename from code content."""
+    # Java: public class Foo -> Foo.java
+    m = re.search(r"public\s+(?:class|interface|enum|record)\s+(\w+)", code)
+    if m:
+        return f"{m.group(1)}.java"
+
+    # React component: export function Foo or export default function Foo
+    m = re.search(r"export\s+(?:default\s+)?function\s+(\w+)", code)
+    if m and lang in ("tsx", "jsx", "typescript", "javascript", "ts", "js"):
+        ext = LANG_EXTENSIONS.get(lang, ".tsx")
+        return f"{m.group(1)}{ext}"
+
+    # Python: class-based or just use lang extension
+    m = re.search(r"^class\s+(\w+)", code, re.MULTILINE)
+    if m and lang in ("python", "py"):
+        # Convert CamelCase to snake_case
+        name = re.sub(r"(?<!^)(?=[A-Z])", "_", m.group(1)).lower()
+        return f"{name}.py"
+
+    return ""
+
+
+def write_file(filepath: str, content: str) -> bool:
+    """Write content to a file, creating directories as needed."""
+    abs_path = os.path.abspath(filepath)
+    dir_path = os.path.dirname(abs_path)
+
+    if os.path.exists(abs_path):
+        try:
+            confirm = input(f"  {YELLOW}File exists: {abs_path}. Overwrite? [y/N] {RESET}")
+            if confirm.lower() != "y":
+                print(f"  {DIM}Skipped.{RESET}")
+                return False
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n  {DIM}Skipped.{RESET}")
+            return False
+
+    os.makedirs(dir_path, exist_ok=True)
+
+    with open(abs_path, "w") as f:
+        f.write(content)
+        if not content.endswith("\n"):
+            f.write("\n")
+
+    print(f"  {GREEN}Wrote {abs_path}{RESET}")
+    return True
+
+
+def prompt_save_blocks(blocks: list[dict]):
+    """After a response with code blocks, offer to save them."""
+    if not blocks:
+        return
+
+    n = len(blocks)
+    label = "block" if n == 1 else "blocks"
+    print(f"  {DIM}[{n} code {label} detected — use /save or /saveall]{RESET}")
+
+
+def handle_save(args: str, blocks: list[dict]):
+    """Handle /save [filename] command."""
+    if not blocks:
+        print(f"  {DIM}No code blocks in last response.{RESET}")
+        return
+
+    block = blocks[-1]
+    filepath = args.strip() if args.strip() else block["filename"]
+
+    if not filepath:
+        ext = LANG_EXTENSIONS.get(block["lang"], ".txt")
+        try:
+            filepath = input(f"  {DIM}Save as (default: output{ext}): {RESET}").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n  {DIM}Cancelled.{RESET}")
+            return
+        if not filepath:
+            filepath = f"output{ext}"
+
+    write_file(filepath, block["code"])
+
+
+def handle_saveall(args: str, blocks: list[dict]):
+    """Handle /saveall [directory] command."""
+    if not blocks:
+        print(f"  {DIM}No code blocks in last response.{RESET}")
+        return
+
+    target_dir = args.strip() if args.strip() else "."
+
+    for i, block in enumerate(blocks):
+        filename = block["filename"]
+        if not filename:
+            ext = LANG_EXTENSIONS.get(block["lang"], ".txt")
+            filename = f"block_{i + 1}{ext}"
+
+        filepath = os.path.join(target_dir, filename)
+        write_file(filepath, block["code"])
+
+
+def handle_blocks(blocks: list[dict]):
+    """Handle /blocks command — list code blocks from last response."""
+    if not blocks:
+        print(f"  {DIM}No code blocks in last response.{RESET}")
+        return
+
+    for i, block in enumerate(blocks):
+        lang = block["lang"] or "text"
+        filename = block["filename"] or "(unnamed)"
+        lines = block["code"].count("\n") + 1
+        print(f"  {DIM}[{i + 1}]{RESET} {lang}  {filename}  ({lines} lines)")
+
+
+def stream_generate(prompt: str) -> str:
+    """Send prompt to Ollama and stream tokens to stdout."""
+    payload = json.dumps({
+        "model": MODEL,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": 0.7, "num_predict": 2048},
+    }).encode()
+
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+
+    full_response = ""
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            for line in resp:
+                if not line.strip():
+                    continue
+                data = json.loads(line)
+                token = data.get("response", "")
+                if token:
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+                    full_response += token
+                if data.get("done"):
+                    break
+    except urllib.error.URLError as e:
+        print(f"\n{YELLOW}Connection error: {e.reason}{RESET}")
+        print(f"{DIM}Is Ollama running on 2070.zero?{RESET}")
+        return ""
+    except KeyboardInterrupt:
+        pass
+
+    print()
+    return full_response
+
+
+def main():
+    print(BANNER)
+
+    # Check connectivity
+    try:
+        req = urllib.request.Request(
+            "http://2070.zero:11434/api/tags",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            models = json.loads(resp.read()).get("models", [])
+            names = [m["name"] for m in models]
+            if MODEL not in names and f"{MODEL}:latest" not in names:
+                print(f"{YELLOW}Warning: model '{MODEL}' not found. Available: {', '.join(names)}{RESET}\n")
+    except Exception:
+        print(f"{YELLOW}Warning: cannot reach Ollama at 2070.zero:11434{RESET}\n")
+
+    history = []
+    last_blocks: list[dict] = []
+
+    while True:
+        try:
+            user_input = input(f"{GREEN}{BOLD}bridge > {RESET}")
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{DIM}Goodbye!{RESET}")
+            break
+
+        user_input = user_input.strip()
+        if not user_input:
+            continue
+
+        if user_input == "/quit":
+            print(f"{DIM}Goodbye!{RESET}")
+            break
+        elif user_input == "/clear":
+            history.clear()
+            last_blocks.clear()
+            print(f"{DIM}Conversation cleared.{RESET}")
+            continue
+        elif user_input == "/model":
+            print(f"{DIM}Model: {MODEL} @ {OLLAMA_URL}{RESET}")
+            continue
+        elif user_input == "/blocks":
+            handle_blocks(last_blocks)
+            continue
+        elif user_input.startswith("/save ") or user_input == "/save":
+            args = user_input[5:] if len(user_input) > 5 else ""
+            handle_save(args, last_blocks)
+            continue
+        elif user_input.startswith("/saveall") :
+            args = user_input[8:] if len(user_input) > 8 else ""
+            handle_saveall(args, last_blocks)
+            continue
+        elif user_input.startswith("/"):
+            print(f"{DIM}Unknown command: {user_input}{RESET}")
+            continue
+
+        history.append({"role": "user", "content": user_input})
+
+        # Build context from history
+        context_parts = []
+        for msg in history[-10:]:  # last 10 turns for context
+            if msg["role"] == "user":
+                context_parts.append(f"User: {msg['content']}")
+            else:
+                context_parts.append(f"Assistant: {msg['content']}")
+
+        prompt = "\n".join(context_parts) + "\nAssistant:"
+
+        print(f"\n{CYAN}{BOLD}bridge{RESET}{DIM} >{RESET} ", end="")
+        response = stream_generate(prompt)
+        print()
+
+        if response:
+            history.append({"role": "assistant", "content": response})
+            last_blocks = extract_code_blocks(response)
+            prompt_save_blocks(last_blocks)
+
+
+if __name__ == "__main__":
+    main()
