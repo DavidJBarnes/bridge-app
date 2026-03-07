@@ -12,6 +12,8 @@ services:
       - BRIDGE_INFERENCE_PROVIDER=${BRIDGE_INFERENCE_PROVIDER:-ollama}
       - BRIDGE_OLLAMA_BASE_URL=${BRIDGE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - BRIDGE_MODEL_NAME=${BRIDGE_MODEL_NAME:-bridge-cli}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - api-data:/app/data
     restart: unless-stopped
