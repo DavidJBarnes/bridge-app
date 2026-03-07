@@ -79,7 +79,7 @@ export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
           const updated = [...prev]
           const last = updated[updated.length - 1]
           if (last.role === 'assistant') {
-            updated[updated.length - 1] = { ...last, content: fullText }
+            updated[updated.length - 1] = { ...last, content: fullText.trimEnd() }
           }
           return updated
         })
