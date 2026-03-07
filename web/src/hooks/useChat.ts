@@ -20,9 +20,10 @@ interface UseChatReturn {
  * Hook for managing chat conversations with streaming support.
  * @param apiUrl - Base URL of the Bridge API.
  * @param apiKey - API key for authentication.
+ * @param projectId - Optional project ID for context injection.
  * @returns Chat state and control functions.
  */
-export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
+export function useChat(apiUrl: string, apiKey: string, projectId?: number | null): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +61,7 @@ export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
           apiKey,
           allMessages,
           (token) => {
+
             setMessages((prev) => {
               const updated = [...prev]
               const last = updated[updated.length - 1]
@@ -72,7 +74,8 @@ export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
               return updated
             })
           },
-          abortController.signal
+          abortController.signal,
+          projectId,
         )
 
         setMessages((prev) => {
@@ -95,7 +98,7 @@ export function useChat(apiUrl: string, apiKey: string): UseChatReturn {
         abortRef.current = null
       }
     },
-    [apiUrl, apiKey, messages, isLoading]
+    [apiUrl, apiKey, messages, isLoading, projectId]
   )
 
   const clearMessages = useCallback(() => {

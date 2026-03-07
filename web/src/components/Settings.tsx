@@ -27,7 +27,7 @@ export function Settings({ config, onSave, onClose, theme, onThemeChange, models
   const [model, setModel] = useState(config.model)
 
   const handleSave = useCallback(() => {
-    onSave({ apiUrl: apiUrl.replace(/\/+$/, ''), apiKey, model })
+    onSave({ ...config, apiUrl: apiUrl.replace(/\/+$/, ''), apiKey, model })
     onClose()
   }, [apiUrl, apiKey, model, onSave, onClose])
 
