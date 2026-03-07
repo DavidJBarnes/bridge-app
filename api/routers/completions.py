@@ -18,6 +18,7 @@ from api.services.auth import check_rate_limit
 from api.services.context_builder import build_completion_context, build_chat_context
 from api.services.inference import (
     format_alpaca_prompt,
+    format_chat_messages,
     get_provider,
 )
 
@@ -206,15 +207,16 @@ async def create_chat(
         ] + modified_messages
 
     provider = get_provider()
+    formatted_prompt = format_chat_messages(modified_messages)
     start = time.time()
 
     if request.stream:
         return _stream_chat(
-            provider, modified_messages, request, db, api_key, start
+            provider, formatted_prompt, request, db, api_key, start
         )
 
-    text = await provider.chat(
-        modified_messages, request.max_tokens, request.temperature
+    text = await provider.generate(
+        formatted_prompt, request.max_tokens, request.temperature
     )
     duration = time.time() - start
 
@@ -234,14 +236,14 @@ async def create_chat(
     )
 
 
-def _stream_chat(provider, messages, request, db, api_key, start):
+def _stream_chat(provider, formatted_prompt, request, db, api_key, start):
     """Create a streaming response for chat requests."""
 
     async def event_stream():
         """Yield SSE events for each generated token."""
         token_count = 0
-        async for token in provider.chat_stream(
-            messages, request.max_tokens, request.temperature
+        async for token in provider.generate_stream(
+            formatted_prompt, request.max_tokens, request.temperature
         ):
             token_count += 1
             yield f"data: {json.dumps({'token': token})}\n\n"

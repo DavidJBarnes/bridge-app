@@ -94,39 +94,6 @@ class InferenceProvider(ABC):
             Individual tokens as they are generated.
         """
 
-    async def chat(self, messages: list[dict], max_tokens: int = 2048, temperature: float = 0.1) -> str:
-        """Generate a chat response from conversation messages.
-
-        Default implementation falls back to generate with formatted prompt.
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'.
-            max_tokens: Maximum tokens to generate.
-            temperature: Sampling temperature.
-
-        Returns:
-            Generated response text.
-        """
-        return await self.generate(format_chat_messages(messages), max_tokens, temperature)
-
-    async def chat_stream(
-        self, messages: list[dict], max_tokens: int = 2048, temperature: float = 0.1
-    ) -> AsyncGenerator[str, None]:
-        """Stream a chat response token-by-token.
-
-        Default implementation falls back to generate_stream with formatted prompt.
-
-        Args:
-            messages: List of message dicts with 'role' and 'content'.
-            max_tokens: Maximum tokens to generate.
-            temperature: Sampling temperature.
-
-        Yields:
-            Individual tokens as they are generated.
-        """
-        async for token in self.generate_stream(format_chat_messages(messages), max_tokens, temperature):
-            yield token
-
     @abstractmethod
     async def list_models(self) -> list[dict]:
         """List available models from this provider.
@@ -187,45 +154,6 @@ class OllamaProvider(InferenceProvider):
                         data = json_mod.loads(line)
                         if "response" in data:
                             yield data["response"]
-
-    async def chat(self, messages: list[dict], max_tokens: int = 2048, temperature: float = 0.1) -> str:
-        """Generate a chat response via Ollama's native chat API."""
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"num_predict": max_tokens, "temperature": temperature},
-                },
-            )
-            response.raise_for_status()
-            return response.json()["message"]["content"]
-
-    async def chat_stream(
-        self, messages: list[dict], max_tokens: int = 2048, temperature: float = 0.1
-    ) -> AsyncGenerator[str, None]:
-        """Stream a chat response via Ollama's native chat API."""
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": True,
-                    "options": {"num_predict": max_tokens, "temperature": temperature},
-                },
-            ) as response:
-                response.raise_for_status()
-                import json as json_mod
-
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        data = json_mod.loads(line)
-                        if "message" in data and data["message"].get("content"):
-                            yield data["message"]["content"]
 
     async def list_models(self) -> list[dict]:
         """List models available in Ollama."""
