@@ -1,5 +1,6 @@
 services:
   api:
+    image: davidjbarnes/bridge-app:api-latest
     build:
       context: .
       dockerfile: api/Dockerfile
@@ -7,20 +8,23 @@ services:
       - "8000:8000"
     environment:
       - BRIDGE_DATABASE_URL=sqlite:///./bridge.db
-      - BRIDGE_ADMIN_API_KEY=bridge-admin-dev
-      - BRIDGE_INFERENCE_PROVIDER=ollama
-      - BRIDGE_OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - BRIDGE_MODEL_NAME=bridge-cli
+      - BRIDGE_ADMIN_API_KEY=${BRIDGE_ADMIN_API_KEY:-bridge-admin-dev}
+      - BRIDGE_INFERENCE_PROVIDER=${BRIDGE_INFERENCE_PROVIDER:-ollama}
+      - BRIDGE_OLLAMA_BASE_URL=${BRIDGE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - BRIDGE_MODEL_NAME=${BRIDGE_MODEL_NAME:-bridge-cli}
     volumes:
-      - api-data:/app
+      - api-data:/app/data
+    restart: unless-stopped
 
   web:
+    image: davidjbarnes/bridge-app:web-latest
     build:
       context: web
     ports:
       - "3000:80"
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   api-data:
