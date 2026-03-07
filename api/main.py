@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
 from api.database import init_db
-from api.routers import completions, keys
+from api.routers import completions, keys, projects
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -35,6 +35,7 @@ app.add_middleware(
 
 app.include_router(completions.router)
 app.include_router(keys.router)
+app.include_router(projects.router)
 
 
 @app.on_event("startup")
