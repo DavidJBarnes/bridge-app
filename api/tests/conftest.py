@@ -10,6 +10,9 @@ from api.database import get_db
 from api.main import app
 from api.models.api_key import ApiKey, Base
 from api.models.usage_log import UsageLog  # noqa: F401 — ensures table is registered
+from api.models.project import Project  # noqa: F401 — ensures table is registered
+from api.models.project_file import ProjectFile  # noqa: F401 — ensures table is registered
+from api.models.file_chunk import FileChunk  # noqa: F401 — ensures table is registered
 
 
 @pytest.fixture

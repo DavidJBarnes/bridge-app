@@ -11,6 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from api.config import settings
 from api.models.api_key import Base
 from api.models.usage_log import UsageLog  # noqa: F401 — register table
+from api.models.project import Project  # noqa: F401 — register table
+from api.models.project_file import ProjectFile  # noqa: F401 — register table
+from api.models.file_chunk import FileChunk  # noqa: F401 — register table
 
 logger = logging.getLogger(__name__)
 

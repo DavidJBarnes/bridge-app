@@ -3,7 +3,7 @@
 import datetime
 
 from sqlalchemy import Column, DateTime, Integer, String, Boolean
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -21,3 +21,5 @@ class ApiKey(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)
     request_count = Column(Integer, default=0)
+
+    projects = relationship("Project", back_populates="api_key", cascade="all, delete-orphan")
